@@ -74,7 +74,7 @@ class GoogleVeoProvider:
         first_frame_url: str | None = None,
         output_path: str | None = None,
         use_fast_model: bool = False,
-        person_generation: str = "allow_adult",
+        person_generation: str | None = None,
     ) -> GenerationResult:
         """
         Generate video using Veo 3.1.
@@ -86,7 +86,7 @@ class GoogleVeoProvider:
             first_frame_url: Optional image URL to animate
             output_path: Where to save the video
             use_fast_model: Use faster but lower quality model
-            person_generation: "allow_adult" or "dont_allow"
+            person_generation: "allow_all" (text-to-video) or "allow_adult" (image-to-video)
         """
         from google.genai import types
 
@@ -103,8 +103,13 @@ class GoogleVeoProvider:
         logger.debug(f"   Model: {model}")
 
         try:
-            # Build config
-            config = types.GenerateVideoConfig(
+            # Determine person_generation based on mode
+            # Veo 3.1: text-to-video requires "allow_all", image-to-video requires "allow_adult"
+            if person_generation is None:
+                person_generation = "allow_adult" if first_frame_url else "allow_all"
+
+            # Build config (GenerateVideosConfig - plural)
+            config = types.GenerateVideosConfig(
                 aspect_ratio=aspect_ratio,
                 person_generation=person_generation,
             )
@@ -114,7 +119,7 @@ class GoogleVeoProvider:
                 # Image-to-video
                 image_data = await self._fetch_image(first_frame_url)
                 image = types.Image(image_bytes=image_data)
-                operation = await client.aio.models.generate_video(
+                operation = await client.aio.models.generate_videos(
                     model=model,
                     prompt=prompt,
                     image=image,
@@ -122,7 +127,7 @@ class GoogleVeoProvider:
                 )
             else:
                 # Text-to-video
-                operation = await client.aio.models.generate_video(
+                operation = await client.aio.models.generate_videos(
                     model=model,
                     prompt=prompt,
                     config=config,
@@ -142,8 +147,9 @@ class GoogleVeoProvider:
                     error="No video generated",
                 )
 
-            # Get video data
+            # Get video data - download using the client
             video = operation.response.generated_videos[0]
+            client.files.download(file=video.video)
             video_data = video.video.video_bytes
 
             # Save
