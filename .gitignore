@@ -49,11 +49,11 @@ uv.lock
 
 # === Generated Content (large files) ===
 output/
-exports/
+# exports/
 data/
 *.mp3
 *.mp4
-*.wav
+# *.wav
 *.webm
 *.avi
 *.mov
